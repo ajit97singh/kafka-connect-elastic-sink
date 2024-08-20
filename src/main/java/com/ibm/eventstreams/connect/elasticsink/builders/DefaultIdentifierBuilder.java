@@ -15,12 +15,16 @@
  */
 package com.ibm.eventstreams.connect.elasticsink.builders;
 
+import com.ibm.eventstreams.connect.elasticsink.ElasticWriter;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Builds document identifiers from Kafka Connect SinkRecords
  */
 public class DefaultIdentifierBuilder implements IdentifierBuilder {
+    private static final Logger log = LoggerFactory.getLogger(ElasticWriter.class);
     /**
      * Convert a Kafka Connect SinkRecord into a document identifier.
      *
@@ -28,14 +32,17 @@ public class DefaultIdentifierBuilder implements IdentifierBuilder {
      *
      * @return the document identifier
      */
+
+
     @Override
     public String fromSinkRecord(SinkRecord record)
     {
+        log.info("Using Default Id Builder");
         // - A unique id is made from the Kafka topic, partition and offset. That allows us
         //   to reinsert the same document after a failure/retry cycle. While the
         //   new document will get an updated version tag if it's already been inserted,
         //   the content will be preserved.
-        return record.topic() + "!" + record.kafkaPartition() + "!" + record.kafkaOffset();        
+        return record.topic() + "!" + record.kafkaPartition() + "!" + record.kafkaOffset();
     }
 
     /**

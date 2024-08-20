@@ -23,9 +23,12 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.security.GeneralSecurityException;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.eclipse.jetty.client.HttpClient;
@@ -184,7 +187,7 @@ public class ElasticWriter {
      */
     public void connect() {
         log.trace("[{}] Entry {}.connect", Thread.currentThread().getId(), classname);
-
+        log.info("Trying to Set up connection");
         setupConnection();
 
         // Try to connect to the server 
@@ -230,8 +233,23 @@ public class ElasticWriter {
         String index = indexBuilder.generateIndex(record);
 
         // The document id can either come from the Kafka record's key or be a unique id.
-        String id = identifierBuilder.fromSinkRecord(record);
+        if(Objects.isNull(record) || Objects.isNull(record.value())){
+            log.info("Empty record found, skipping it.");
+            return;
+        }
+        Struct valueMap = (Struct) record.value();
+        String source = String.valueOf(valueMap.get("sourceIndex"));
+        String sourceUuid;
+        try {
+            sourceUuid = String.valueOf(valueMap.get("uuid"));
+        }catch (DataException e){
+            log.info("Skipping record without uuid");
+            return;
+        }
 
+
+        String id = source + "-" + sourceUuid;
+        log.info("Generated Id: {}", id);
         /* The BULK API requires the body of the request to be a list of pairs of JSON objects
          * with the first of the pair being the request itself and the second being the document
          * content. Each element must be separated from the next, and the whole request terminated by
@@ -265,7 +283,7 @@ public class ElasticWriter {
             bulkMsg.append(jsonString);
             bulkMsg.append("\n");
 
-            log.debug("Index document: index=" + index + ", _id=" + id);
+            log.info("Index document: index=" + index + ", _id=" + id);
         }
         else {
             // If the document ID is not unique, an empty record deletes from the index
@@ -382,11 +400,14 @@ public class ElasticWriter {
         }
 
         if (httpClient == null) {
+            log.info("http client is null");
             httpClient = setupConnection();
+            log.info("Connection set up successful");
         }
 
         try {
             httpClient.start();
+            log.info("Client start successful");
 
             // Doing a health check. We don't care about the return information
             // only that the request succeeds. This is done synchronously. This particular
@@ -483,22 +504,27 @@ public class ElasticWriter {
         // Point at the keystore and truststore. The passwords
         // are only set if necessary, as a default truststore may not be protected with password.
         if (notNullOrEmpty(keyStore)) {
+            log.info("this is keystore: {}", keyStore);
             protocol = "https";
             sslContextFactory.setKeyStorePath(keyStore);
             if (notNullOrEmpty(keyStorePassword)) {
+                log.info("this is keyStorePassword: {}", keyStorePassword);
                 sslContextFactory.setKeyStorePassword(keyStorePassword);
             }
         }
         if (notNullOrEmpty(trustStore)) {
+            log.info("this is trustStore: {}", trustStore);
             protocol = "https";
             sslContextFactory.setTrustStorePath(trustStore);
             if (notNullOrEmpty(trustStorePassword)) {
+                log.info("this is trustStorePassword: {}", trustStorePassword);
                 sslContextFactory.setTrustStorePassword(trustStorePassword);
             }
         }
 
         try {
             uri = new URI(protocol + "://" + connection);
+            log.info("URI created : {}", uri);
         }
         catch (URISyntaxException e) {
             log.error("Invalid URI {}",uri.toString());
@@ -507,28 +533,36 @@ public class ElasticWriter {
 
         // Force the use of TLSv1.2 or later
         // Set the Protocols and CipherSuites that are permitted
+        log.info("Setting Defaults");
         setDefaults(sslContextFactory);
 
-        if (protocol.equals("https"))
+        log.info("Using Protocol: {}", protocol);
+        if (protocol.equals("https")){
             httpClient = new HttpClient(sslContextFactory);
-        else
+        } else{
             httpClient = new HttpClient();
+            log.info("HTTP client created");
+        }
+
 
         // Authentication using userid/password is enabled here
         if (notNullOrEmpty(userid)) {
+            log.info("this is userid: {}", userid);
+            log.info("this is password: {}", password);
             AuthenticationStore auth = httpClient.getAuthenticationStore();
             auth.addAuthenticationResult(new BasicAuthentication.BasicResult(uri, userid, password));
         }
 
         // Tuning parameters for Jetty connections.
-        int maxConnections = jettyMaxConnections;
-        log.debug("Setting HTTP maxConnections to {}", maxConnections);
+        log.info("Setting max connections: {}", jettyMaxConnections);
+        int maxConnections = Integer.parseInt( String.valueOf(jettyMaxConnections));
+        log.info("Setting HTTP maxConnections to {}", maxConnections);
         httpClient.setMaxConnectionsPerDestination(maxConnections);
-
+        log.info("Max connection setup successful");
         // Setting an idle timeout can reduce the number of active threads/connections when set to non-zero value
         int idleTimeout = jettyIdleTimeoutSec;
         if (idleTimeout > 0) {
-            log.debug("Setting idleTimeout to {} seconds", idleTimeout);
+            log.info("Setting idleTimeout to {} seconds", idleTimeout);
             httpClient.setIdleTimeout((long)(idleTimeout * 1000)); // Be explicit about casting to API datatype
         }
 
@@ -536,7 +570,7 @@ public class ElasticWriter {
         httpClient.setConnectTimeout(jettyConnectionTimeoutSec * 1000);
 
         setProxy(httpClient);
-
+        log.info("Proxy setup successful");
         return httpClient;
     }
 

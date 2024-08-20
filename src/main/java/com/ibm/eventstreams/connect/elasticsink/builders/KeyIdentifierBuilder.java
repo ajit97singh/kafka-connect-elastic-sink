@@ -15,13 +15,17 @@
  */
 package com.ibm.eventstreams.connect.elasticsink.builders;
 
+import com.ibm.eventstreams.connect.elasticsink.ElasticWriter;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Builds document identifiers from Kafka Connect SinkRecords
  */
 public class KeyIdentifierBuilder implements IdentifierBuilder {
+    private static final Logger log = LoggerFactory.getLogger(ElasticWriter.class);
     /**
      * Convert a Kafka Connect SinkRecord into a document identifier.
      *
@@ -31,6 +35,7 @@ public class KeyIdentifierBuilder implements IdentifierBuilder {
      */
     @Override
     public String fromSinkRecord(SinkRecord record) {
+        log.info("Using Key Identifier Builder");
         if (record.key() == null) {
             throw new ConnectException("Key must be present to use as document ID.");
         }

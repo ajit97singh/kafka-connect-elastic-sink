@@ -65,7 +65,7 @@ public class ElasticSinkTask extends SinkTask {
         // Construct a writer to interface with ES
         writer = new ElasticWriter();
         writer.configure(props);
-
+        log.info("Starting Sink connector this config: {}", props);
         // Make a connection as an initial test of the configuration
         writer.connect();
 
@@ -88,6 +88,7 @@ public class ElasticSinkTask extends SinkTask {
         for (SinkRecord r: records) {
             log.debug("Putting record for topic {}, partition {} and offset {}", r.topic(), r.kafkaPartition(), r.kafkaOffset());
             writer.send(r);
+            log.info("Record added to bulk commit");
         }
 
         context.requestCommit();
